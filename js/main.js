@@ -29,19 +29,14 @@ function initWebGL(splats) {
 
     let cornerOffsets = [];
     
-    // let offsets = [
-    //     [-0.01, -0.01], // Bottom left corner
-    //     [ 0.01, -0.01], // Bottom right corner
-    //     [ 0.01,  0.01], // Top right corner
-    //     [-0.01,  0.01], // Top left corner
-    // ];
-
     let offsets = [
-        [-0.00, -0.00], // Bottom left corner
-        [ 0.00, -0.00], // Bottom right corner
-        [ 0.00,  0.00], // Top right corner
-        [-0.00,  0.00], // Top left corner
+        [-0.01, -0.01], // Bottom left corner
+        [ 0.01, -0.01], // Bottom right corner
+        [ 0.01,  0.01], // Top right corner
+        [-0.01,  0.01], // Top left corner
     ];
+
+    let indices = [];
 
     for (let i = 0; i < splats.length; i++) {
         // Add each point 4 times (corners) and color for each 
@@ -50,6 +45,13 @@ function initWebGL(splats) {
             colors.push(...splats[i].color.slice(0, 3), 1.0);
             cornerOffsets.push(...offsets[j])
         }
+    }
+
+    for (let i = 0; i < splats.length * 4; i += 4) { // *4 because each splat now has 4 vertices
+        // First triangle
+        indices.push(i, i + 1, i + 2);
+        // Second triangle
+        indices.push(i, i + 2, i + 3);
     }
 
     console.log('positions.length')
@@ -61,7 +63,7 @@ function initWebGL(splats) {
     console.log('cornerOffsets.length')
     console.log(cornerOffsets.length)
 
-    let scalingFactor = 1.0; // Adjust as needed
+    let scalingFactor = 0.9; // Adjust as needed
 
     // Create and bind the color buffer
     const colorBuffer = gl.createBuffer(); 
@@ -79,6 +81,10 @@ function initWebGL(splats) {
     gl.bindBuffer(gl.ARRAY_BUFFER, cornerOffsetBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(cornerOffsets), gl.STATIC_DRAW);
 
+    const indexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);    
+
     // Load and compile the shaders and link them into a program
     const shaderProgram = initShaderProgram(gl, vertexShaderSource, fragmentShaderSource);
 
@@ -87,7 +93,7 @@ function initWebGL(splats) {
 
     // Model-view matrix
     mat4.identity(modelViewMatrix); // Start with the identity matrix
-    mat4.translate(modelViewMatrix, modelViewMatrix, [0.9, -1.5, -5.0]); // Move the camera back a bit
+    mat4.translate(modelViewMatrix, modelViewMatrix, [0.9, -1.5, -7.0]); // Move the camera back a bit
 
     function render() {
         gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black
@@ -108,7 +114,9 @@ function initWebGL(splats) {
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
         gl.vertexAttribPointer(vertexPosition, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(vertexPosition);;
-    
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+
         // Bind the color buffer, set vertex attribute
         const vertexColor = gl.getAttribLocation(shaderProgram, 'aVertexColor'); // Get the attribute location
         gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
@@ -122,7 +130,8 @@ function initWebGL(splats) {
 
 
         // Draw the points
-        gl.drawArrays(gl.POINTS, 0, positions.length / 3); // each point has 3 coordinates
+        const count = indices.length;
+        gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, 0); // each point has 3 coordinates
     }
 
     render();
@@ -138,7 +147,7 @@ function initWebGL(splats) {
 const vertexShaderSource = `
 attribute vec3 aVertexPosition;
 attribute vec4 aVertexColor;
-attribute vec2 aCornerOffset;
+attribute vec2 aCornerOffset; // This is the new attribute
 
 uniform mat4 uModelViewMatrix;
 uniform mat4 uProjectionMatrix;
@@ -148,12 +157,20 @@ varying lowp vec4 vColor;
 
 void main(void) {
     vec4 viewModelPosition = uModelViewMatrix * vec4(aVertexPosition, 1.0);
-    viewModelPosition.xy += aCornerOffset;
+    float distance = -viewModelPosition.z;
+
+    //  Perspective-correct scaling
+    float size = (distance != 0.0) ? 2.0 * uScalingFactor / distance : 1.0;
+    
+    vec2 scaledOffset = aCornerOffset * size;
+    
+    // Apply the offset to viewModelPosition in the xy-plane
+    viewModelPosition.xy += scaledOffset;
+
     gl_Position = uProjectionMatrix * viewModelPosition;
-    float distance = -viewModelPosition.z; // Use negative distance for proper scaling
-    gl_PointSize = (distance != 0.0) ? uScalingFactor / distance : 1.0; // Avoid division by zero
     vColor = aVertexColor;
 }
+
 `;
 
 
