@@ -27,31 +27,19 @@ function initWebGL(splats) {
 
     let colors = []
 
-    let cornerOffsets = [];
-    
-    let offsets = [
-        [-0.01, -0.01], // Bottom left corner
-        [ 0.01, -0.01], // Bottom right corner
-        [ 0.01,  0.01], // Top right corner
-        [-0.01,  0.01], // Top left corner
-    ];
-
-    let indices = [];
-
     for (let i = 0; i < splats.length; i++) {
-        // Add each point 4 times (corners) and color for each 
-        for(let j = 0; j < 4; j++) {
-            positions.push(...splats[i].position); 
-            colors.push(...splats[i].color.slice(0, 3), 1.0);
-            cornerOffsets.push(...offsets[j])
-        }
-    }
+        positions.push(...splats[i].position); 
 
-    for (let i = 0; i < splats.length * 4; i += 4) { // *4 because each splat now has 4 vertices
-        // First triangle
-        indices.push(i, i + 1, i + 2);
-        // Second triangle
-        indices.push(i, i + 2, i + 3);
+        let r = splats[i].color[0];
+        let g = splats[i].color[1];
+        let b = splats[i].color[2];
+        let a = splats[i].color[3];
+
+        r *= a;
+        g *= a;
+        b *= a;
+
+        colors.push(r, g, b, a);
     }
 
     console.log('positions.length')
@@ -60,42 +48,33 @@ function initWebGL(splats) {
     console.log('colors.length')
     console.log(colors.length)
 
-    console.log('cornerOffsets.length')
-    console.log(cornerOffsets.length)
+    let scalingFactor = 0.05; // Adjust as needed
 
-    let scalingFactor = 0.9; // Adjust as needed
-
-    // Create and bind the color buffer
     const colorBuffer = gl.createBuffer(); 
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
     
 
-    // Create a buffer for the vertex positions
     const positionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
 
-    // Create a buffer for the corner offsets
-    const cornerOffsetBuffer = gl.createBuffer(); 
-    gl.bindBuffer(gl.ARRAY_BUFFER, cornerOffsetBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(cornerOffsets), gl.STATIC_DRAW);
-
-    const indexBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);    
-
-    // Load and compile the shaders and link them into a program
     const shaderProgram = initShaderProgram(gl, vertexShaderSource, fragmentShaderSource);
 
-    // Projection matrix
     mat4.perspective(projectionMatrix, glMatrix.toRadian(60), gl.canvas.clientWidth / gl.canvas.clientHeight, 0.1, 100.0);
 
-    // Model-view matrix
-    mat4.identity(modelViewMatrix); // Start with the identity matrix
-    mat4.translate(modelViewMatrix, modelViewMatrix, [0.9, -1.5, -7.0]); // Move the camera back a bit
+    mat4.identity(modelViewMatrix); 
+    mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, 2.0, -5.0]); 
+    mat4.scale(modelViewMatrix, modelViewMatrix, [1, -1, 1]); // Flip on Y-axis
 
     function render() {
+        // gl.enable(gl.DEPTH_TEST);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+        // Disable writing to the depth buffer
+        gl.depthMask(false);
+        
         gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -115,23 +94,18 @@ function initWebGL(splats) {
         gl.vertexAttribPointer(vertexPosition, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(vertexPosition);;
 
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-
         // Bind the color buffer, set vertex attribute
         const vertexColor = gl.getAttribLocation(shaderProgram, 'aVertexColor'); // Get the attribute location
         gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
         gl.vertexAttribPointer(vertexColor, 4, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(vertexColor);
 
-        const cornerOffsetLocation = gl.getAttribLocation(shaderProgram, 'aCornerOffset');
-        gl.enableVertexAttribArray(cornerOffsetLocation);
-        gl.bindBuffer(gl.ARRAY_BUFFER, cornerOffsetBuffer);
-        gl.vertexAttribPointer(cornerOffsetLocation, 2, gl.FLOAT, false, 0, 0);
+        const vertexCount = positions.length / 3;
+        gl.drawArrays(gl.POINTS, 0, vertexCount); // each point has 3 coordinates
 
+        //  Re-enable writing to the depth buffer for subsequent opaque objects
+        gl.depthMask(true);
 
-        // Draw the points
-        const count = indices.length;
-        gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, 0); // each point has 3 coordinates
     }
 
     render();
@@ -147,7 +121,6 @@ function initWebGL(splats) {
 const vertexShaderSource = `
 attribute vec3 aVertexPosition;
 attribute vec4 aVertexColor;
-attribute vec2 aCornerOffset; // This is the new attribute
 
 uniform mat4 uModelViewMatrix;
 uniform mat4 uProjectionMatrix;
@@ -158,15 +131,9 @@ varying lowp vec4 vColor;
 void main(void) {
     vec4 viewModelPosition = uModelViewMatrix * vec4(aVertexPosition, 1.0);
     float distance = -viewModelPosition.z;
-
     //  Perspective-correct scaling
-    float size = (distance != 0.0) ? 2.0 * uScalingFactor / distance : 1.0;
-    
-    vec2 scaledOffset = aCornerOffset * size;
-    
-    // Apply the offset to viewModelPosition in the xy-plane
-    viewModelPosition.xy += scaledOffset;
-
+    float size = (distance != 0.0) ? uScalingFactor / distance : 1.0;
+    gl_PointSize = size;
     gl_Position = uProjectionMatrix * viewModelPosition;
     vColor = aVertexColor;
 }
@@ -191,7 +158,10 @@ void main(void) {
 // Adjusted readSplatFile call to initialize WebGL resources after data is loaded
 const splatFileUrl = 'data/nike.splat';
 readSplatFile(splatFileUrl, splats => {
-    console.log('splats')
+
+    // Sort splats from nearest to furthest relative to the camera, assuming camera looks down the positive Z-axis  
+    splats.sort((a, b) => b.position[2] - a.position[2]);
+
     console.log(splats)
 
     // Once splats are loaded, initialize WebGL resources and start rendering
