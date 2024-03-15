@@ -17,7 +17,6 @@ function resizeCanvasToDisplaySize(canvas) {
     }
 }
 
-// Global scope for example purposes
 let projectionMatrix = mat4.create();
 let modelViewMatrix = mat4.create();
 
@@ -42,19 +41,12 @@ function initWebGL(splats) {
         colors.push(r, g, b, a);
     }
 
-    console.log('positions.length')
-    console.log(positions.length)
-
-    console.log('colors.length')
-    console.log(colors.length)
-
-    let scalingFactor = 0.05; // Adjust as needed
+    let scalingFactor = 1.0; 
 
     const colorBuffer = gl.createBuffer(); 
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
     
-
     const positionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
@@ -64,56 +56,47 @@ function initWebGL(splats) {
     mat4.perspective(projectionMatrix, glMatrix.toRadian(60), gl.canvas.clientWidth / gl.canvas.clientHeight, 0.1, 100.0);
 
     mat4.identity(modelViewMatrix); 
-    mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, 2.0, -5.0]); 
-    mat4.scale(modelViewMatrix, modelViewMatrix, [1, -1, 1]); // Flip on Y-axis
+    mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, 1.0, -4.0]); 
+    mat4.scale(modelViewMatrix, modelViewMatrix, [1, -1, 1]);
 
     function render() {
-        // gl.enable(gl.DEPTH_TEST);
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
-        // Disable writing to the depth buffer
         gl.depthMask(false);
         
-        gl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black
+        gl.clearColor(0.0, 0.0, 0.0, 1.0); 
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
         gl.useProgram(shaderProgram);
 
-        // Set the scaling factor uniform
         const scalingFactorLocation = gl.getUniformLocation(shaderProgram, 'uScalingFactor');
         gl.uniform1f(scalingFactorLocation, scalingFactor);
     
-        // Set the shader uniforms for projection and model-view matrices
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'), false, projectionMatrix);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'), false, modelViewMatrix);
     
-        // Bind the position buffer, set vertex attribute
         const vertexPosition = gl.getAttribLocation(shaderProgram, 'aVertexPosition');
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
         gl.vertexAttribPointer(vertexPosition, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(vertexPosition);;
 
-        // Bind the color buffer, set vertex attribute
-        const vertexColor = gl.getAttribLocation(shaderProgram, 'aVertexColor'); // Get the attribute location
+        const vertexColor = gl.getAttribLocation(shaderProgram, 'aVertexColor'); 
         gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
         gl.vertexAttribPointer(vertexColor, 4, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(vertexColor);
 
         const vertexCount = positions.length / 3;
-        gl.drawArrays(gl.POINTS, 0, vertexCount); // each point has 3 coordinates
+        gl.drawArrays(gl.POINTS, 0, vertexCount);
 
-        //  Re-enable writing to the depth buffer for subsequent opaque objects
         gl.depthMask(true);
-
     }
 
     render();
 
-    // Update the scaling factor from the slider and re-render
     document.getElementById('scalingFactor').addEventListener('input', function(event) {
         scalingFactor = parseFloat(event.target.value);
-        render(); // Call the render function to update the scene with the new scaling factor
+        render();
     });
 }
 
@@ -127,6 +110,7 @@ uniform mat4 uProjectionMatrix;
 uniform float uScalingFactor;
 
 varying lowp vec4 vColor;
+varying float vPointSize;
 
 void main(void) {
     vec4 viewModelPosition = uModelViewMatrix * vec4(aVertexPosition, 1.0);
@@ -136,8 +120,8 @@ void main(void) {
     gl_PointSize = size;
     gl_Position = uProjectionMatrix * viewModelPosition;
     vColor = aVertexColor;
+    vPointSize = size;
 }
-
 `;
 
 
@@ -146,24 +130,28 @@ const fragmentShaderSource = `
 precision mediump float;
 
 varying lowp vec4 vColor;
+varying float vPointSize;
 
 void main(void) {
-    // Create a circular point
-    gl_FragColor = vColor;
+    // Gaussian falloff
+    float radius = vPointSize / 2.0;
+
+    vec2 center = vec2(0.5, 0.5);
+    vec2 coord = gl_PointCoord - center;
+    float distance = length(coord * vec2(radius, radius));
+    
+    float sigma = radius / 2.0;
+    float gaussian = exp(-0.5 * (distance * distance) / (sigma * sigma));
+    
+    gl_FragColor = vec4(vColor.rgb, vColor.a * gaussian);
 }
 `;
 
 
 
-// Adjusted readSplatFile call to initialize WebGL resources after data is loaded
-const splatFileUrl = 'data/nike.splat';
+const splatFileUrl = 'data/train.splat'; // [nike.splat, plush.splat, train.splat]
 readSplatFile(splatFileUrl, splats => {
 
-    // Sort splats from nearest to furthest relative to the camera, assuming camera looks down the positive Z-axis  
     splats.sort((a, b) => b.position[2] - a.position[2]);
-
-    console.log(splats)
-
-    // Once splats are loaded, initialize WebGL resources and start rendering
     initWebGL(splats);
 });
