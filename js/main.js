@@ -140,8 +140,8 @@ void main(void) {
     vec2 coord = gl_PointCoord - center;
     float distance = length(coord * vec2(radius, radius));
     
-    float sigma = radius / 2.0;
-    float gaussian = exp(-0.5 * (distance * distance) / (sigma * sigma));
+    float sigma = radius;
+    float gaussian = exp(-0.5 * (distance * distance) / sigma);
     
     gl_FragColor = vec4(vColor.rgb, vColor.a * gaussian);
 }
@@ -149,7 +149,7 @@ void main(void) {
 
 
 
-const splatFileUrl = 'data/train.splat'; // [nike.splat, plush.splat, train.splat]
+const splatFileUrl = 'data/nike.splat'; // [nike.splat, plush.splat, train.splat]
 readSplatFile(splatFileUrl, splats => {
 
     splats.sort((a, b) => b.position[2] - a.position[2]);

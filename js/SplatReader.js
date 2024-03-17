@@ -4,24 +4,21 @@ function readSplatFile(url, callback) {
         .then(buffer => {
             const dataView = new DataView(buffer);
             const splats = [];
-            const splatSize = 32; // Each splat is 32 bytes
+            const splatSize = 32; 
 
             for (let offset = 0; offset < dataView.byteLength; offset += splatSize) {
-                // Read position (3 floats)
                 const position = [
                     dataView.getFloat32(offset, true),
                     dataView.getFloat32(offset + 4, true),
                     dataView.getFloat32(offset + 8, true)
                 ];
 
-                // Read scale (3 floats)
                 const scale = [
                     dataView.getFloat32(offset + 12, true),
                     dataView.getFloat32(offset + 16, true),
                     dataView.getFloat32(offset + 20, true)
                 ];
 
-                // Read color (RGBA, 4 uint8s)
                 const color = [
                     dataView.getUint8(offset + 24) / 255,
                     dataView.getUint8(offset + 25) / 255,
@@ -29,7 +26,6 @@ function readSplatFile(url, callback) {
                     dataView.getUint8(offset + 27) / 255
                 ];
 
-                // Read rotation (quaternion, 4 uint8s, decoded)
                 const rotation = [
                     (dataView.getUint8(offset + 28) - 128) / 128,
                     (dataView.getUint8(offset + 29) - 128) / 128,
