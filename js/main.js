@@ -60,6 +60,8 @@ function initWebGL(splats) {
     mat4.scale(modelViewMatrix, modelViewMatrix, [1, -1, 1]);
 
     function render() {
+        let startTime = performance.now();
+
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
@@ -90,14 +92,23 @@ function initWebGL(splats) {
         gl.drawArrays(gl.POINTS, 0, vertexCount);
 
         gl.depthMask(true);
+
+        let endTime = performance.now();
+        let renderTime = endTime - startTime;
+
+        console.log(`Render time: ${renderTime.toFixed(2)} ms`);
     }
 
     render();
 
     document.getElementById('scalingFactor').addEventListener('input', function(event) {
         scalingFactor = parseFloat(event.target.value);
+        
+        document.getElementById('scalingFactorValue').textContent = scalingFactor.toFixed(1);
+        
         render();
     });
+    
 }
 
 // Vertex shader program
@@ -149,7 +160,7 @@ void main(void) {
 
 
 
-const splatFileUrl = 'data/nike.splat'; // [nike.splat, plush.splat, train.splat]
+const splatFileUrl = 'data/train.splat'; // [nike.splat, plush.splat, train.splat]
 readSplatFile(splatFileUrl, splats => {
 
     splats.sort((a, b) => b.position[2] - a.position[2]);

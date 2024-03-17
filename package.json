@@ -1,0 +1,15 @@
+{
+  "name": "hw-webgl",
+  "version": "1.0.0",
+  "description": "Gaussian splatting in WebGL",
+  "main": "index.html",
+  "scripts": {
+    "start": "live-server . --port=8000"
+  },
+  
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  }
+}
